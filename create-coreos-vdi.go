@@ -19,7 +19,7 @@ func get_gpg_keyring() (openpgp.EntityList) {
     if err != nil {
         log.Fatal(err)
     }
-	kring, err := openpgp.ReadKeyRing(res.Body)
+	kring, err := openpgp.ReadArmoredKeyRing(res.Body)
     if err != nil {
         log.Fatal(err)
     }
