@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/cheggaaa/pb"
 	"github.com/docopt/docopt-go"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/clearsign"
@@ -17,6 +16,10 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"crypto/sha1"
+	"crypto/sha512"
+	"github.com/cheggaaa/pb"
+
 )
 
 // Image signing key: buildbot@coreos.com
@@ -39,6 +42,7 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 
 	arguments, _ := docopt.Parse(usage, nil, true, "Coreos create-coreos-vdi 0.1", false)
 
+    
 	RAW_IMAGE_NAME := "coreos_production_image.bin"
 	IMAGE_NAME := RAW_IMAGE_NAME + ".bz2"
 	DIGESTS_NAME := IMAGE_NAME + ".DIGESTS.asc"
@@ -124,18 +128,32 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 		fmt.Printf("Trusted key id %d matches keyid %d\n", decoded_long_id_int, decoded_long_id_int)
 	}
 
-	re := regexp.MustCompile(`(?im)^# (?P<method>sha1|sha512) HASH(?:\r?)\n(?P<hash>.[^\s]*)\s*(?P<file>.*?)$`)
+    var re = regexp.MustCompile(`(?m)(?P<method>(SHA1|SHA512)) HASH(?:\r?)\n(?P<hash>.[^\s]*)\s*(?P<file>[\w\d_\.]*)`)
+
+    var keymap map[string]int = make(map[string]int)
+    for index, name := range re.SubexpNames() {
+        keymap[name] = index
+    }
+    
 	matches := re.FindAllStringSubmatch(digests_text, -1)
-	for index, name := range re.SubexpNames() {
-		hash := make(map[string]string)
-		if index != 0 {
-			for _, match := range matches {
-				hash[name] = match[index]
-				fmt.Printf("%s: %s\n", name, match[index])
-			}
+	
+	var bz_hash_sha1 string
+	var bz_hash_sha512 string
+ 
+	for _, match := range matches {
+		if match[keymap["file"]] == IMAGE_NAME {
+		    if match[keymap["method"]] == "SHA1" {
+		        bz_hash_sha1 = match[keymap["hash"]]
+		    }
+		    if match[keymap["method"]] == "SHA512" {
+		        bz_hash_sha512 = match[keymap["hash"]]
+		    }
 		}
 	}
-
+    
+	sha1h := sha1.New()
+    sha512h := sha512.New()
+    
 	bzfile, _ := os.Create(DOWN_IMAGE)
 	defer bzfile.Close()
 
@@ -144,10 +162,24 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	bar := pb.New(int(response.ContentLength)).SetUnits(pb.U_BYTES)
 	bar.Start()
 	// create multi writer
-	writer := io.MultiWriter(bzfile, bar)
+	writer := io.MultiWriter(bzfile, sha1h, sha512h, bar)
 
 	// and copy
 	io.Copy(writer, response.Body)
+	    fmt.Println("")
+	    fmt.Println("")
+	
+	if hex.EncodeToString(sha1h.Sum([]byte{})) == bz_hash_sha1 {
+	    fmt.Println("sha1 hashes match")
+	}
+	if hex.EncodeToString(sha512h.Sum([]byte{})) == bz_hash_sha512 {
+	    fmt.Println("sha512 hashes match")
+	}
+	/*
+		fmt.Printf(" %s | %s\n", hex.EncodeToString(sha1h.Sum([]byte{})), bz_hash_sha1)
+		fmt.Printf(" %s | %s\n", hex.EncodeToString(sha512h.Sum([]byte{})), bz_hash_sha512)
+    */
+
 	_ = fmt.Sprintf("%s %s %s", digests_text, VDI_IMAGE, DOWN_IMAGE)
 	vboxmanage, _ := get_vboxmanage()
 	fmt.Print(vboxmanage)
