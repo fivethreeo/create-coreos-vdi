@@ -59,16 +59,19 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
     DIGESTS_URL := BASE_URL + "/" + DIGESTS_NAME
     //DOWN_IMAGE := WORKDIR + "/" + RAW_IMAGE_NAME
     
-    //image_head_result, err := http.Head(IMAGE_URL)
-    _, err := http.Head(IMAGE_URL)
+    var err error
+    
+    _, err = http.Head(IMAGE_URL)
     if err != nil {
         log.Fatal("Image URL unavailable:" + IMAGE_URL)
     }
+    
     digests_get_result, err := http.Get(DIGESTS_URL)
     if err != nil {
         log.Fatal("Image signature unavailable:" + DIGESTS_URL)
     }
-    digests_messagetext, err := ioutil.ReadAll(digests_get_result.Body)
+    
+    digests_raw_message, err := ioutil.ReadAll(digests_get_result.Body)
     digests_get_result.Body.Close()
 
     pubkey_get_result, err := http.Get(GPG_KEY_URL)
@@ -79,18 +82,21 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
     pubkey, _ := ioutil.ReadAll(pubkey_get_result.Body)
     pubkey_get_result.Body.Close()
     
-    pubkey_buffer := bytes.NewBufferString(string(pubkey))
-    keyring, err := openpgp.ReadArmoredKeyRing(pubkey_buffer)
+    pubkey_reader := bytes.NewReader(pubkey)
+    keyring, err := openpgp.ReadArmoredKeyRing(pubkey_reader)
     if err != nil {
         log.Fatal(err)
     }
-	digests_clearsign_message, _ := clearsign.Decode(digests_messagetext)
-    digests_clearsign_message_reader := bytes.NewReader(digests_clearsign_message.Bytes)
+    
+	decoded_message, _ := clearsign.Decode(digests_raw_message)
+	digests_text := string(decoded_message.Bytes)
+    decoded_message_reader := bytes.NewReader(decoded_message.Bytes)
 
-    res, err := openpgp.CheckDetachedSignature(keyring, digests_clearsign_message_reader, digests_clearsign_message.ArmoredSignature.Body)
+    res, err := openpgp.CheckDetachedSignature(keyring, decoded_message_reader, decoded_message.ArmoredSignature.Body)
     if res != nil {
        fmt.Println("Yay! Valid!")
     }
+       fmt.Println(digests_text)
 
     vboxmanage, _ := get_vboxmanage()
     fmt.Print(vboxmanage)
