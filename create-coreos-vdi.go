@@ -3,18 +3,19 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
+	"os"
+	"strings"
+	"regexp"
+	"log"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"github.com/docopt/docopt-go"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/clearsign"
-	"io"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"os"
-	"strings"
 )
 
 // Image signing key: buildbot@coreos.com
@@ -119,6 +120,15 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	if res.PrimaryKey.KeyId == decoded_long_id_int {
 		fmt.Printf("Trusted key id %d mathes keyid %d\n", decoded_long_id_int, decoded_long_id_int)
 	}
+	re := regexp.MustCompile(`(?im)^# (?P<method>sha1|sha512) HASH(?:\r?)\n(?P<hash>.*?)$`)
+	matches  := re.FindAllStringSubmatch(digests_text, -1)
+	for _, v := range matches {
+    	for i, name := range re.SubexpNames() {
+    	   if i != 0 {
+               fmt.Printf("%s: %s\n", name, v[i])
+           }
+        }
+    }
 	_ = fmt.Sprintf("%s %s", digests_text, VDI_IMAGE)
 
 	vboxmanage, _ := get_vboxmanage()
