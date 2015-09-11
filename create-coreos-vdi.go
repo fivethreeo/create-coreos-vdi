@@ -4,8 +4,11 @@ import (
     "fmt"
     "log"
     "net/http"
+    "io"
     "io/ioutil"
+    "bufio"
     "bytes"
+    "strings"
     "github.com/docopt/docopt-go"
     "golang.org/x/crypto/openpgp"
     "golang.org/x/crypto/openpgp/clearsign"
@@ -51,13 +54,13 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
         case "beta":
             BASE_URL = "http://beta.release.core-os.net/amd64-usr/current"
         default:
-            BASE_URL = "http://storage.core-os.net/coreos/amd64-usr/" + VERSION_ID
+            BASE_URL = fmt.Sprintf("http://storage.core-os.net/coreos/amd64-usr/%s", VERSION_ID)
     }
     
         
-    IMAGE_URL := BASE_URL + "/" + IMAGE_NAME
-    DIGESTS_URL := BASE_URL + "/" + DIGESTS_NAME
-    //DOWN_IMAGE := WORKDIR + "/" + RAW_IMAGE_NAME
+    IMAGE_URL := fmt.Sprintf("%s/%s", BASE_URL, IMAGE_NAME)
+    DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
+    //DOWN_IMAGE := fmt.Sprintf("%s/%s", WORKDIR, RAW_IMAGE_NAME)
     
     var err error
     
@@ -73,6 +76,16 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
     
     digests_raw_message, err := ioutil.ReadAll(digests_get_result.Body)
     digests_get_result.Body.Close()
+        
+    // Gets CoreOS verion from version.txt file
+    VERSION_NAME := "version.txt"
+    VERSION_URL := fmt.Sprintf("%s/%s", BASE_URL, VERSION_NAME)
+    
+    version_result, err := http.Get(VERSION_URL)
+    vars, _ := ReadVars(version_result.Body)
+    VDI_IMAGE_NAME := fmt.Sprintf("coreos_production_%s.%s.%s.vdi", vars["COREOS_BUILD"], vars["COREOS_BRANCH"], vars["COREOS_PATCH"])
+    // VDI_IMAGE := fmt.Sprintf("%s/%s", DEST, VDI_IMAGE_NAME)
+    fmt.Println(VDI_IMAGE_NAME)
 
     pubkey_get_result, err := http.Get(GPG_KEY_URL)
     if err != nil {
@@ -101,3 +114,31 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
     vboxmanage, _ := get_vboxmanage()
     fmt.Print(vboxmanage)
 }
+
+func ReadVars(regular_reader io.Reader) (map[string]string, error) {
+ 	config := make(map[string]string)
+ 	reader := bufio.NewReader(regular_reader)
+ 	for {
+ 		line, err := reader.ReadString('\n')
+ 		
+ 		// check if the line has = sign
+        // and process the line. Ignore the rest.
+ 		if equal := strings.Index(line, "="); equal >= 0 {
+ 			if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
+ 				value := ""
+ 				if len(line) > equal {
+ 					value = strings.TrimSpace(line[equal+1:])
+ 				}
+                // assign the config map
+ 				config[key] = value
+ 			}
+ 		}
+ 		if err == io.EOF {
+ 			break
+ 		}
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 	}
+ 	return config, nil
+ }
