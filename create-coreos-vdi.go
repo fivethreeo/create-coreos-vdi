@@ -1,17 +1,20 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"bufio"
 	"bytes"
-	"fmt"
+	"log"
+	"os"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"encoding/hex"
+	"encoding/binary"
 	"github.com/docopt/docopt-go"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/clearsign"
-	"io"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"strings"
 )
 
 // Image signing key: buildbot@coreos.com
@@ -57,6 +60,11 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
 	//DOWN_IMAGE := fmt.Sprintf("%s/%s", WORKDIR, RAW_IMAGE_NAME)
 
+    dest, ok := arguments["-p"].(string)
+    if ok == false {
+        dest, _ = os.Getwd()
+    }
+    
 	var err error
 
 	_, err = http.Head(IMAGE_URL)
@@ -79,8 +87,12 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	version_result, err := http.Get(VERSION_URL)
 	vars, _ := ReadVars(version_result.Body)
 	VDI_IMAGE_NAME := fmt.Sprintf("coreos_production_%s.%s.%s.vdi", vars["COREOS_BUILD"], vars["COREOS_BRANCH"], vars["COREOS_PATCH"])
-	// VDI_IMAGE := fmt.Sprintf("%s/%s", DEST, VDI_IMAGE_NAME)
-	fmt.Println(VDI_IMAGE_NAME)
+	VDI_IMAGE := fmt.Sprintf("%s/%s", dest, VDI_IMAGE_NAME)
+
+    decoded_long_id, err := hex.DecodeString(GPG_LONG_ID) 
+    decoded_long_id_int :=  binary.BigEndian.Uint64(decoded_long_id)
+
+	fmt.Printf("Trusted hex key id %s is decimal %d\n", GPG_LONG_ID, decoded_long_id_int)
 
 	pubkey_get_result, err := http.Get(GPG_KEY_URL)
 	if err != nil {
@@ -101,10 +113,13 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	decoded_message_reader := bytes.NewReader(decoded_message.Bytes)
 
 	res, err := openpgp.CheckDetachedSignature(keyring, decoded_message_reader, decoded_message.ArmoredSignature.Body)
-	if res != nil {
-		fmt.Println("Yay! Valid!")
+	if err != nil {
+		fmt.Println("Signature check for DIGESTS failed.")
 	}
-	fmt.Println(digests_text)
+	if res.PrimaryKey.KeyId == decoded_long_id_int {
+	   fmt.Printf("Trusted key id %d mathes keyid %d\n", decoded_long_id_int, decoded_long_id_int)
+	} 
+	_ = fmt.Sprintf("%s %s", digests_text, VDI_IMAGE)
 
 	vboxmanage, _ := get_vboxmanage()
 	fmt.Print(vboxmanage)
