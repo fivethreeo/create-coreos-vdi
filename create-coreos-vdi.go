@@ -4,8 +4,12 @@ import (
     "fmt"
     "log"
     "net/http"
+    "io/ioutil"
+    "bytes"
     "github.com/docopt/docopt-go"
     "golang.org/x/crypto/openpgp"
+    "golang.org/x/crypto/openpgp/clearsign"
+
 )
 
 
@@ -13,18 +17,6 @@ import (
 var GPG_KEY_URL string = "https://coreos.com/security/image-signing-key/CoreOS_Image_Signing_Key.pem"
 var GPG_LONG_ID string = "50E0885593D2DCB4"
 
-func get_gpg_keyring() (openpgp.EntityList) {
-    res, err := http.Get(GPG_KEY_URL)
-    defer res.Body.Close()
-    if err != nil {
-        log.Fatal(err)
-    }
-	kring, err := openpgp.ReadArmoredKeyRing(res.Body)
-    if err != nil {
-        log.Fatal(err)
-    }
-    return kring
-}
 
 func main() {
     usage := `
@@ -67,19 +59,39 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
     DIGESTS_URL := BASE_URL + "/" + DIGESTS_NAME
     //DOWN_IMAGE := WORKDIR + "/" + RAW_IMAGE_NAME
     
-    res, err := http.Head(IMAGE_URL)
+    //image_head_result, err := http.Head(IMAGE_URL)
+    _, err := http.Head(IMAGE_URL)
     if err != nil {
         log.Fatal("Image URL unavailable:" + IMAGE_URL)
     }
-    res, err = http.Get(DIGESTS_URL)
+    digests_get_result, err := http.Get(DIGESTS_URL)
     if err != nil {
         log.Fatal("Image signature unavailable:" + DIGESTS_URL)
     }
-    _, err = openpgp.ReadMessage(res.Body, get_gpg_keyring(), nil, nil)
+    digests_messagetext, err := ioutil.ReadAll(digests_get_result.Body)
+    digests_get_result.Body.Close()
+
+    pubkey_get_result, err := http.Get(GPG_KEY_URL)
     if err != nil {
         log.Fatal(err)
     }
+    
+    pubkey, _ := ioutil.ReadAll(pubkey_get_result.Body)
+    pubkey_get_result.Body.Close()
+    
+    pubkey_buffer := bytes.NewBufferString(string(pubkey))
+    keyring, err := openpgp.ReadArmoredKeyRing(pubkey_buffer)
+    if err != nil {
+        log.Fatal(err)
+    }
+	digests_clearsign_message, _ := clearsign.Decode(digests_messagetext)
+    digests_clearsign_message_reader := bytes.NewReader(digests_clearsign_message.Bytes)
+
+    res, err := openpgp.CheckDetachedSignature(keyring, digests_clearsign_message_reader, digests_clearsign_message.ArmoredSignature.Body)
+    if res != nil {
+       fmt.Println("Yay! Valid!")
+    }
+
     vboxmanage, _ := get_vboxmanage()
     fmt.Print(vboxmanage)
-
 }
