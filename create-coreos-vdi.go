@@ -1,20 +1,20 @@
 package main
 
 import (
-	"fmt"
-	"strings"
 	"bufio"
 	"bytes"
-	"log"
-	"os"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"encoding/hex"
 	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 	"github.com/docopt/docopt-go"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/clearsign"
+	"io"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"strings"
 )
 
 // Image signing key: buildbot@coreos.com
@@ -60,11 +60,11 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
 	//DOWN_IMAGE := fmt.Sprintf("%s/%s", WORKDIR, RAW_IMAGE_NAME)
 
-    dest, ok := arguments["-p"].(string)
-    if ok == false {
-        dest, _ = os.Getwd()
-    }
-    
+	dest, ok := arguments["-p"].(string)
+	if ok == false {
+		dest, _ = os.Getwd()
+	}
+
 	var err error
 
 	_, err = http.Head(IMAGE_URL)
@@ -89,8 +89,8 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	VDI_IMAGE_NAME := fmt.Sprintf("coreos_production_%s.%s.%s.vdi", vars["COREOS_BUILD"], vars["COREOS_BRANCH"], vars["COREOS_PATCH"])
 	VDI_IMAGE := fmt.Sprintf("%s/%s", dest, VDI_IMAGE_NAME)
 
-    decoded_long_id, err := hex.DecodeString(GPG_LONG_ID) 
-    decoded_long_id_int :=  binary.BigEndian.Uint64(decoded_long_id)
+	decoded_long_id, err := hex.DecodeString(GPG_LONG_ID)
+	decoded_long_id_int := binary.BigEndian.Uint64(decoded_long_id)
 
 	fmt.Printf("Trusted hex key id %s is decimal %d\n", GPG_LONG_ID, decoded_long_id_int)
 
@@ -117,8 +117,8 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 		fmt.Println("Signature check for DIGESTS failed.")
 	}
 	if res.PrimaryKey.KeyId == decoded_long_id_int {
-	   fmt.Printf("Trusted key id %d mathes keyid %d\n", decoded_long_id_int, decoded_long_id_int)
-	} 
+		fmt.Printf("Trusted key id %d mathes keyid %d\n", decoded_long_id_int, decoded_long_id_int)
+	}
 	_ = fmt.Sprintf("%s %s", digests_text, VDI_IMAGE)
 
 	vboxmanage, _ := get_vboxmanage()
