@@ -1,17 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"bufio"
 	"bytes"
-	"crypto/sha1"
-	"crypto/sha512"
-	"encoding/binary"
-	"encoding/hex"
-	"fmt"
-	"github.com/cheggaaa/pb"
-	"github.com/docopt/docopt-go"
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/clearsign"
 	"io"
 	"io/ioutil"
 	"log"
@@ -19,6 +11,14 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"crypto/sha1"
+	"crypto/sha512"
+	"encoding/hex"
+	"encoding/binary"
+	"github.com/cheggaaa/pb"
+	"github.com/docopt/docopt-go"
+	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/clearsign"
 )
 
 // Image signing key: buildbot@coreos.com
@@ -152,7 +152,7 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	sha1h := sha1.New()
 	sha512h := sha512.New()
 
-	bzfile, _ := os.Create(DOWN_IMAGE)
+	bzfile, _ := os.Create(fmt.Sprintf("%s/%s", workdir, IMAGE_NAME))
 	defer bzfile.Close()
 
 	response, err := http.Get(IMAGE_URL)
