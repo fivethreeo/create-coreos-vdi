@@ -16,6 +16,8 @@ import (
 	"github.com/docopt/docopt-go"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/clearsign"
+    "github.com/cheggaaa/pb"
+
 )
 
 // Image signing key: buildbot@coreos.com
@@ -57,15 +59,18 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 		BASE_URL = fmt.Sprintf("http://storage.core-os.net/coreos/amd64-usr/%s", VERSION_ID)
 	}
 
-	IMAGE_URL := fmt.Sprintf("%s/%s", BASE_URL, IMAGE_NAME)
-	DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
-	//DOWN_IMAGE := fmt.Sprintf("%s/%s", WORKDIR, RAW_IMAGE_NAME)
-
 	dest, ok := arguments["-p"].(string)
 	if ok == false {
 		dest, _ = os.Getwd()
 	}
 
+    workdir, _ := ioutil.TempDir(dest, "coreos")
+    
+	IMAGE_URL := fmt.Sprintf("%s/%s", BASE_URL, IMAGE_NAME)
+	DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
+	DOWN_IMAGE := fmt.Sprintf("%s/%s", workdir, RAW_IMAGE_NAME)
+    
+    
 	var err error
 
 	_, err = http.Head(IMAGE_URL)
@@ -118,19 +123,34 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 		fmt.Println("Signature check for DIGESTS failed.")
 	}
 	if res.PrimaryKey.KeyId == decoded_long_id_int {
-		fmt.Printf("Trusted key id %d mathes keyid %d\n", decoded_long_id_int, decoded_long_id_int)
+		fmt.Printf("Trusted key id %d matches keyid %d\n", decoded_long_id_int, decoded_long_id_int)
 	}
-	re := regexp.MustCompile(`(?im)^# (?P<method>sha1|sha512) HASH(?:\r?)\n(?P<hash>.*?)$`)
+	
+	re := regexp.MustCompile(`(?im)^# (?P<method>sha1|sha512) HASH(?:\r?)\n(?P<hash>.[^\s]*)\s*(?P<file>.*?)$`)
 	matches  := re.FindAllStringSubmatch(digests_text, -1)
-	for _, v := range matches {
-    	for i, name := range re.SubexpNames() {
-    	   if i != 0 {
-               fmt.Printf("%s: %s\n", name, v[i])
-           }
+	for index, name := range re.SubexpNames() {
+		hash := make(map[string]string)
+        if index != 0 {
+            for _, match := range matches {
+                 hash[name] = match[index]
+                 fmt.Printf("%s: %s\n", name, match[index])
+            }
         }
     }
-	_ = fmt.Sprintf("%s %s", digests_text, VDI_IMAGE)
+    
+    bzfile, _ := os.Create(DOWN_IMAGE)
+    defer bzfile.Close()
 
+    response, err := http.Get(IMAGE_URL)
+    defer response.Body.Close()
+    bar := pb.New(int(response.ContentLength)).SetUnits(pb.U_BYTES)
+    bar.Start()
+    // create multi writer
+    writer := io.MultiWriter(bzfile, bar)
+    
+    // and copy
+    io.Copy(writer, response.Body)
+	_ = fmt.Sprintf("%s %s %s", digests_text, VDI_IMAGE, DOWN_IMAGE)
 	vboxmanage, _ := get_vboxmanage()
 	fmt.Print(vboxmanage)
 }
