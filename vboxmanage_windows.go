@@ -16,13 +16,13 @@ func get_vboxmanage() (string, error) {
 		if err == nil {
 			VboxInstallDir, _, err := VboxKey.GetStringValue("InstallDir")
 			if err == nil {
-				vboxmanage, err = exec.LookPath(VboxInstallDir + `VBoxManage.exe`)
+        		fmt.Printf("set PATH=%s;%s\n", `%PATH%`, VboxInstallDir)
 			}
 		}
-		if err != nil {
-			fmt.Println("VBoxManage tool is required to create vdi.")
-			os.Exit(1)
-		}
+	}
+	if err != nil {
+		fmt.Println("VBoxManage tool is required to create vdi.")
+		os.Exit(1)
 	}
 	return vboxmanage, err
 }
