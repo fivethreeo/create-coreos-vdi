@@ -6,15 +6,19 @@ Golang tools for dowloading/building virtualbox vdi
 
 Install golang
 
+```
 go get github.com/fivethreeo/create-coreos-vdi
 go install github.com/fivethreeo/create-coreos-vdi
+```
 
 ## Usage
 
 Install virtualbox
 
+```
 create-coreos-vdi -h
 create-coreos-vdi
+```
 
 ## Contributing
 
