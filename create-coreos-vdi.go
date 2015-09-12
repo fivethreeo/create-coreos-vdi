@@ -1,24 +1,25 @@
 package main
 
 import (
-	"fmt"
 	"bufio"
 	"bytes"
+	"crypto/sha1"
+	"crypto/sha512"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"github.com/cheggaaa/pb"
+	"github.com/docopt/docopt-go"
+	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/clearsign"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
-	"crypto/sha1"
-	"crypto/sha512"
-	"encoding/hex"
-	"encoding/binary"
-	"github.com/cheggaaa/pb"
-	"github.com/docopt/docopt-go"
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/clearsign"
 )
 
 // Image signing key: buildbot@coreos.com
@@ -69,7 +70,7 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 
 	IMAGE_URL := fmt.Sprintf("%s/%s", BASE_URL, IMAGE_NAME)
 	DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
-	DOWN_IMAGE := fmt.Sprintf("%s/%s", workdir, RAW_IMAGE_NAME)
+	DOWN_IMAGE := filepath.Join(workdir, RAW_IMAGE_NAME)
 
 	var err error
 
@@ -93,7 +94,7 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	version_result, err := http.Get(VERSION_URL)
 	vars, _ := ReadVars(version_result.Body)
 	VDI_IMAGE_NAME := fmt.Sprintf("coreos_production_%s.%s.%s.vdi", vars["COREOS_BUILD"], vars["COREOS_BRANCH"], vars["COREOS_PATCH"])
-	VDI_IMAGE := fmt.Sprintf("%s/%s", dest, VDI_IMAGE_NAME)
+	VDI_IMAGE := filepath.Join(dest, VDI_IMAGE_NAME)
 
 	decoded_long_id, err := hex.DecodeString(GPG_LONG_ID)
 	decoded_long_id_int := binary.BigEndian.Uint64(decoded_long_id)
@@ -121,9 +122,12 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	res, err := openpgp.CheckDetachedSignature(keyring, decoded_message_reader, decoded_message.ArmoredSignature.Body)
 	if err != nil {
 		fmt.Println("Signature check for DIGESTS failed.")
-	}
-	if res.PrimaryKey.KeyId == decoded_long_id_int {
-		fmt.Printf("Trusted key id %d matches keyid %d\n", decoded_long_id_int, decoded_long_id_int)
+		os.Exit(1)
+	} else {
+		if res.PrimaryKey.KeyId == decoded_long_id_int {
+			fmt.Printf("Trusted key id %d matches keyid %d\n", decoded_long_id_int, decoded_long_id_int)
+		}
+		fmt.Printf("DIGESTS signature is valid: ")
 	}
 
 	var re = regexp.MustCompile(`(?m)(?P<method>(SHA1|SHA512)) HASH(?:\r?)\n(?P<hash>.[^\s]*)\s*(?P<file>[\w\d_\.]*)`)
@@ -152,26 +156,30 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	sha1h := sha1.New()
 	sha512h := sha512.New()
 
-	bzfile, _ := os.Create(fmt.Sprintf("%s/%s", workdir, IMAGE_NAME))
+	bzfile, _ := os.Create(filepath.Join(workdir, IMAGE_NAME))
 	defer bzfile.Close()
+
+	fmt.Printf("downloading %s\n", IMAGE_NAME)
 
 	response, err := http.Get(IMAGE_URL)
 	defer response.Body.Close()
+
 	bar := pb.New(int(response.ContentLength)).SetUnits(pb.U_BYTES)
 	bar.Start()
+
 	// create multi writer
 	writer := io.MultiWriter(bzfile, sha1h, sha512h, bar)
 
 	// and copy
 	io.Copy(writer, response.Body)
-	fmt.Println("")
-	fmt.Println("")
+
+	bar.FinishPrint("")
 
 	if hex.EncodeToString(sha1h.Sum([]byte{})) == bz_hash_sha1 {
-		fmt.Println("sha1 hashes match")
+		fmt.Printf("SHA1 hash for %s match the one from DIGESTS\n", IMAGE_NAME)
 	}
 	if hex.EncodeToString(sha512h.Sum([]byte{})) == bz_hash_sha512 {
-		fmt.Println("sha512 hashes match")
+		fmt.Printf("SHA512 hash for %s match the one from DIGESTS\n", IMAGE_NAME)
 	}
 	/*
 		fmt.Printf(" %s | %s\n", hex.EncodeToString(sha1h.Sum([]byte{})), bz_hash_sha1)
