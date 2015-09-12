@@ -20,6 +20,29 @@ create-coreos-vdi -h
 create-coreos-vdi
 ```
 
+To test the vdi with virtualbox
+
+Make sure you have mkisofs installed in linux
+
+```
+create-basic-configdrive -H myhostname -S ~/.ssh/mykey.pub
+
+VBoxManage clonehd coreos_production.vdi mymachine.vdi
+VBoxManage modifyhd mymachine.vdi --resize 10240
+
+VBoxManage createvm --name mymachine --register
+
+VBoxManage modifyvm "mymachine" --memory 1024 --vram 128
+VBoxManage modifyvm "mymachine" --nic1 bridged --bridgeadapter1 "adapter"
+VBoxManage modifyvm "mymachine" --nic2 intnet --intnet2 intnet --nicpromisc2 allow-vms
+
+VBoxManage storagectl "mymachine" --name "IDE Controller" --add ide
+VBoxManage storageattach "mymachine" --storagectl "IDE Controller" \
+  --port 0 --device 0 --type hdd --medium mymachine.vdi
+VBoxManage storageattach "mymachine" --storagectl "IDE Controller" \
+  --port 1 --device 0 --type dvddrive --medium myhostname.iso
+```
+
 ## Contributing
 
 1. Fork it!
