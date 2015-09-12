@@ -25,6 +25,9 @@ To test the vdi with virtualbox
 Make sure you have mkisofs installed in linux
 
 ```
+go get github.com/fivethreeo/create-basic-configdrive
+go install github.com/fivethreeo/create-basic-configdrive
+
 create-basic-configdrive -H myhostname -S ~/.ssh/mykey.pub
 
 VBoxManage clonehd coreos_production.vdi mymachine.vdi
