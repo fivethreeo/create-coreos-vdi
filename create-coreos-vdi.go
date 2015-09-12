@@ -78,16 +78,7 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	DOWN_IMAGE := filepath.Join(workdir, RAW_IMAGE_NAME)
 
 	var err error
-	/*
-		cmdh := exec.Command("cmd", "/C", "vboxmanage")
-		cmdh.Stdout = os.Stdout
-		cmdh.Stderr = os.Stderr
-		err = cmdh.Run()
-	    if err != nil {
-	        log.Fatal(err)
-	    }
-		os.Exit(1)
-	*/
+	
 	_, err = http.Head(IMAGE_URL)
 	if err != nil {
 		log.Fatal("Image URL unavailable:" + IMAGE_URL)
