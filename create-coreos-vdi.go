@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/bzip2"
 	"crypto/sha1"
 	"crypto/sha512"
 	"encoding/binary"
@@ -17,12 +18,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-    "os/exec"
+	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
-	"compress/bzip2"
 	"runtime"
+	"strings"
 )
 
 // Image signing key: buildbot@coreos.com
@@ -44,9 +44,9 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 `
 
 	arguments, _ := docopt.Parse(usage, nil, true, "Coreos create-coreos-vdi 0.1", false)
-	
+
 	_, _ = get_vboxmanage()
-	
+
 	RAW_IMAGE_NAME := "coreos_production_image.bin"
 	IMAGE_NAME := RAW_IMAGE_NAME + ".bz2"
 	DIGESTS_NAME := IMAGE_NAME + ".DIGESTS.asc"
@@ -79,14 +79,14 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 
 	var err error
 	/*
-	cmdh := exec.Command("cmd", "/C", "vboxmanage")
-	cmdh.Stdout = os.Stdout 
-	cmdh.Stderr = os.Stderr 
-	err = cmdh.Run()
-    if err != nil {
-        log.Fatal(err)
-    }
-	os.Exit(1)
+		cmdh := exec.Command("cmd", "/C", "vboxmanage")
+		cmdh.Stdout = os.Stdout
+		cmdh.Stderr = os.Stderr
+		err = cmdh.Run()
+	    if err != nil {
+	        log.Fatal(err)
+	    }
+		os.Exit(1)
 	*/
 	_, err = http.Head(IMAGE_URL)
 	if err != nil {
@@ -169,7 +169,6 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	sha1h := sha1.New()
 	sha512h := sha512.New()
 
-	
 	fmt.Printf("downloading %s\n", IMAGE_NAME)
 
 	response, err := http.Get(IMAGE_URL)
@@ -179,15 +178,15 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	bar.Start()
 
 	bzipped, _ := os.Create(filepath.Join(workdir, IMAGE_NAME))
-	
+
 	// create multi writer
 	writer := io.MultiWriter(sha1h, sha512h, bar, bzipped)
 
 	// and copy
 	io.Copy(writer, response.Body)
-	
+
 	bar.FinishPrint("")
-    
+
 	bzipped.Close()
 
 	if hex.EncodeToString(sha1h.Sum([]byte{})) == bz_hash_sha1 {
@@ -196,37 +195,37 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	if hex.EncodeToString(sha512h.Sum([]byte{})) == bz_hash_sha512 {
 		fmt.Printf("SHA512 hash for %s match the one from DIGESTS\n", IMAGE_NAME)
 	}
-    
+
 	fmt.Printf("Writing %s to %s...\n", IMAGE_NAME, RAW_IMAGE_NAME)
-	
-    bzip2_file, err := os.Open(filepath.Join(workdir, IMAGE_NAME))
+
+	bzip2_file, err := os.Open(filepath.Join(workdir, IMAGE_NAME))
 	if err != nil {
 		log.Fatal(err)
-	}	
+	}
 	bzip2_reader := bzip2.NewReader(bzip2_file)
-	
+
 	bin_file, err := os.Create(DOWN_IMAGE)
 	if err != nil {
 		log.Fatal(err)
-	}	
-	
+	}
+
 	io.Copy(bin_file, bzip2_reader)
-    bin_file.Close()
+	bin_file.Close()
 
 	cmd := exec.Command("vboxmanage", "convertdd", DOWN_IMAGE, VDI_IMAGE, "--format", "VDI")
 
-    if runtime.GOOS == "windows" {
-        // Use cmd /C on windows because LookPath is being difficult
-    	cmd = exec.Command("cmd", "/C", "vboxmanage", "convertdd", DOWN_IMAGE, VDI_IMAGE, "--format", "VDI")
-    }
-	cmd.Stdout = os.Stdout 
-	cmd.Stderr = os.Stderr 
-    fmt.Printf("Converting %s to VirtualBox format...\n", RAW_IMAGE_NAME)
-    err = cmd.Run()
-    if err != nil {
-        log.Fatal(err)
-    }
-    
+	if runtime.GOOS == "windows" {
+		// Use cmd /C on windows because LookPath is being difficult
+		cmd = exec.Command("cmd", "/C", "vboxmanage", "convertdd", DOWN_IMAGE, VDI_IMAGE, "--format", "VDI")
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	fmt.Printf("Converting %s to VirtualBox format...\n", RAW_IMAGE_NAME)
+	err = cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	fmt.Printf("Success! CoreOS %s VDI image was created on %s.", VERSION_ID, VDI_IMAGE_NAME)
 }
 
