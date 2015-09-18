@@ -72,7 +72,8 @@ This tool creates a CoreOS VDI image to be used with VirtualBox.
 	}
 
 	workdir, _ := ioutil.TempDir(dest, "coreos")
-
+	defer os.RemoveAll(workdir)
+	
 	IMAGE_URL := fmt.Sprintf("%s/%s", BASE_URL, IMAGE_NAME)
 	DIGESTS_URL := fmt.Sprintf("%s/%s", BASE_URL, DIGESTS_NAME)
 	DOWN_IMAGE := filepath.Join(workdir, RAW_IMAGE_NAME)
